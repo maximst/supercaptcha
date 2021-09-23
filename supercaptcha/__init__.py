@@ -9,14 +9,14 @@ except ImportError:
     from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from django import forms
 from django.core.cache import cache
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.forms.utils import flatatt
 from django.http import HttpResponse
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy
 from django.views.decorators.cache import never_cache
 
-import settings
+from .settings import *
 
 
 try:
@@ -27,22 +27,22 @@ except ImportError:
 _thread_locals = local()
 
 
-WIDTH = settings.SIZE[0]
-HEIGHT = settings.SIZE[1]
-SYMBOLS = ugettext_lazy(settings.SYMBOLS)
-LENGTH = settings.LENGTH
-BG_COLOR = settings.BACKGROUND_COLOR
-FG_COLORS = settings.FOREGROUND_COLORS
-ENC_TYPE, MIME_TYPE = settings.FORMAT
-JUMP = settings.VERTICAL_JUMP
-COLORIZE = settings.COLORIZE_SYMBOLS
-PREFIX = settings.CACHE_PREFIX
+WIDTH = SIZE[0]
+HEIGHT = SIZE[1]
+SYMBOLS = ugettext_lazy(SYMBOLS)
+LENGTH = LENGTH
+BG_COLOR = BACKGROUND_COLOR
+FG_COLORS = FOREGROUND_COLORS
+ENC_TYPE, MIME_TYPE = FORMAT
+JUMP = VERTICAL_JUMP
+COLORIZE = COLORIZE_SYMBOLS
+PREFIX = CACHE_PREFIX
 CODE_ATTR_NAME = '_captcha_code'
-ERROR_MESSAGE = settings.DEFAULT_ERROR_MESSAGE
-HTML_TEMPLATE = settings.HTML_TEMPLATE
-HTML_TEMPLATE_WITH_REFRESH = settings.HTML_TEMPLATE_WITH_REFRESH
-REFRESH = settings.REFRESH
-REFRESH_LINK_TEXT = ugettext_lazy(settings.REFRESH_LINK_TEXT)
+ERROR_MESSAGE = DEFAULT_ERROR_MESSAGE
+HTML_TEMPLATE = HTML_TEMPLATE
+HTML_TEMPLATE_WITH_REFRESH = HTML_TEMPLATE_WITH_REFRESH
+REFRESH = REFRESH
+REFRESH_LINK_TEXT = ugettext_lazy(REFRESH_LINK_TEXT)
 
 
 def get_current_code():
@@ -68,7 +68,7 @@ def generate_text():
 @never_cache
 def draw(request, code):
     
-    font_name, fontfile = choice(settings.AVAIL_FONTS)
+    font_name, fontfile = choice(AVAIL_FONTS)
     cache_name = '%s-%s-size' % (PREFIX, font_name)
     text = generate_text()
     cache.set('%s-%s' % (PREFIX, code), text, 600)
@@ -126,7 +126,7 @@ def draw(request, code):
     
     response['cache-control'] = 'no-store, no-cache, must-revalidate, proxy-revalidate'
     
-    for f in settings.FILTER_CHAIN:
+    for f in FILTER_CHAIN:
         im = im.filter(getattr(ImageFilter, f))
     
     im.save(response, ENC_TYPE)
@@ -145,7 +145,7 @@ class CaptchaImageWidget(forms.Widget):
         input_attrs = self.build_attrs(attrs, type='text', name=name)
         src = reverse(draw, kwargs={'code': code})
         return mark_safe(self.template % {'src': src, 'input_attrs': flatatt(input_attrs),
-                                          'alt': settings.ALT, 'width': WIDTH, 'length': LENGTH,
+                                          'alt': ALT, 'width': WIDTH, 'length': LENGTH,
                                           'height': HEIGHT, 'rnd': random(),
                                           'refresh_text': REFRESH_LINK_TEXT})
 
@@ -192,25 +192,25 @@ class CaptchaField(forms.MultiValueField):
     def __init__(self, *args, **kwargs):
         fields = (
             forms.CharField(max_length=32, min_length=32),
-            forms.CharField(max_length=settings.LENGTH, min_length=settings.LENGTH),
+            forms.CharField(max_length=LENGTH, min_length=LENGTH),
             )
         super(CaptchaField, self).__init__(fields, *args, **kwargs)
-        
+
     def compress(self, data_list):
         return ' '.join(data_list)
-    
+
     def clean(self, value):
         if len(value) != 2:
-            raise forms.ValidationError, self.error_messages['wrong']
-        
+            raise forms.ValidationError(self.error_messages['wrong'])
+
         code, text = value
         if not text:
-            raise forms.ValidationError, self.error_messages['required']
+            raise forms.ValidationError(self.error_messages['required'])
 
         cached_text = cache.get('%s-%s' % (PREFIX, code))
         cache.set('%s-%s' % (PREFIX, code), generate_text(), 600)
         if not cached_text:
-            raise forms.ValidationError, self.error_messages['internal']
+            raise forms.ValidationError(self.error_messages['internal'])
 
         if text.lower() != cached_text.lower():
-            raise forms.ValidationError, self.error_messages['wrong']
+            raise forms.ValidationError(self.error_messages['wrong'])
